@@ -18,24 +18,22 @@ sector0: 0x200 ~ sector3 : 0x3FFF 文件索引表
 0扇区 偏移512字节
 */
 
-void mark_bit(uint8_t *buffer, uint32_t sec_id) {
-    uint32_t idx = (sec_id / 8) * 8, pos = sec_id % 8;
-    *(buffer + idx) |= (0x1 << pos);
-}
-
-uint8_t check_bit(uint8_t *buffer, uint32_t sec_id) {
-    uint32_t idx = (sec_id / 8) * 8, pos = sec_id % 8;
-    return ((*(buffer + idx) >> pos) & 0x1);
-}
-
-void clear_fileblock(uint8_t *buffer, uint32_t offset) {
-    for(uint32_t i = 0; i < 24; i++) {
-        *(buffer + offset + i) = 0xFF;
-    }
-}
-
 const uint32_t addr_tab[4] = {0x0200, 0x1000, 0x2000, 0x3000};
-const uint32_t addr_idx[4] = {0x0000, 0x1000, 0x2000, 0x3000};
+
+void make_fstate(FileState *fstate, uint8_t year, uint8_t month, uint8_t day) {
+    fstate->day = day;
+    fstate->month = month;
+    fstate->year = year;
+    fstate->state = 0xFF;
+}
+
+void make_file(File *file, char *filename, char *extname) {
+    file->block = 0x00;
+    file->cluster = 0xFFFFFFFF;
+    file->length = 0xFFFFFFFF;
+    strcopy(filename, file->filename, strsize((uint8_t *)filename));
+    strcopy(extname, file->extname, strsize((uint8_t *)extname));
+}
 
 Result create_file(File *file, FileState fstate) {
 
@@ -46,7 +44,7 @@ Result create_file(File *file, FileState fstate) {
     uint8_t *slot_buffer = (uint8_t *)malloc(sizeof(uint8_t) * 24);
 
     //check sector usage table
-    FIND_SECTOR:
+    FIND_SECTOR_CREATE:
     for(idx = 0; idx < 4; idx++) {
         if(sector_isempty(idx)) {
             break;
@@ -57,7 +55,7 @@ Result create_file(File *file, FileState fstate) {
         if(has_gc == 0) {
             system_gc();
             has_gc = 1;
-            goto FIND_SECTOR;
+            goto FIND_SECTOR_CREATE;
         }
         return NO_FILE_BLOCK_SPACE;
     }
@@ -66,6 +64,7 @@ Result create_file(File *file, FileState fstate) {
     addr_end = 0x1000 * (idx + 1) - 24;
 
     for(; addr_start < addr_end; addr_start += 24) {
+        if(count > 1) break;
         w25q32_read(slot_buffer, 24, addr_start);
         fb = (FileBlock *)slot_buffer;
         if(fb->state == 0xFFFFFFFF) {
@@ -153,101 +152,26 @@ Result write_file(File *file, uint8_t *buffer, uint32_t size, WriteMethod method
                 addr_pos += write_size;
             }
         }
-
         free(sector_list);
         return WRITE_FILE_SUCCESS;
 
     }else if(method == APPEND) {
 
-        if(file->cluster == 0xFFFFFFFF) return FILE_CAN_NOT_APPEND;
-        //read old file
-        uint32_t next_addr = file->cluster, temp;
-        //计算文件结束位置
-        pos = file->length % 4092;
-        //文件长度超过一扇区，遍历找到最后一个扇区首地址
-        if(file->length >= 4092) {
-            sectors = file->length / 4092;
-            for(uint32_t i = 0; i < sectors; i++) {
-                w25q32_read((uint8_t *)&temp, 4, (next_addr + 4092));
-                next_addr = temp;
-            }
-        }
-        //计算该扇区空余空间
-        uint32_t left_size = (next_addr + 4092) - (next_addr + pos);
-        //追加模式写新内容起始地址
-        uint32_t write_addr = next_addr + pos;
-        printf("write_addr:0x%x,left_size:%d\n",write_addr,left_size);
-
-        pos = 0;
-        uint32_t write_size = 0x00, addr_pos = 0x00;
-        if(left_size >= size) {
-            //剩余空间足够写追加内容
-            temp = size;
-            while(temp) {
-                write_size = (temp >= 256) ? 256 : (temp % 256);
-                w25q32_write_page((buffer + pos), write_size, (write_addr + addr_pos));
-                pos += write_size;
-                temp -= write_size;
-                addr_pos += write_size;
-            }
-            //确定文件块记录所属扇区
-            pos = file->block / 0x1000;
-            uint8_t *sector_buffer = (uint8_t *)malloc(sizeof(uint8_t) * 4096);
-            addr_pos = (pos == 0) ? 0x00 : addr_tab[pos];
-            w25q32_read(sector_buffer, 4096, addr_pos);
-            printf("addr_pos:0x%x\n", addr_pos);
-            //计算新的文件大小
-            temp = file->length + size;
-            file->length = temp;
-            printf("new_file_size:0x%x\n", temp);
-            write_addr = (pos == 0) ? file->block : (file->block - addr_tab[pos]);
-            //写新文件大小
-            for(uint32_t i = 0; i < 4; i++) {
-                *(sector_buffer + write_addr + 16 + i) = ((temp >> (i * 8)) & 0xFF);
-            }
-            //回写数据
-            write_addr = (pos == 0) ? 0x00 : addr_tab[pos];
-            sector_erase(write_addr);
-            for(uint32_t i = 0; i < 16; i++) {
-                w25q32_write_page((sector_buffer + i * 256), 256, (write_addr + i * 256));
-            }
-
-            free(sector_buffer);
-        }else {
-            //剩余空间不够写追加内容
-
-        }
-
-        temp = size - left_size;
-
-        /*
-        temp = size - left_size;
-        pos = 0;
-        //calc sector amounts
-        sectors = temp / 4092;
-        if((temp % 4092) != 0) {
-            sectors += 1;
-        }
-        //find available sectors
-        addr_tab = (uint32_t *)malloc(sizeof(uint32_t) * sectors);
-        //start position is 4
-        for(uint32_t i = 4; i < 4096; i++) {
-            if(pos >= sectors) break;
-            if(sector_isempty(i)) {
-                *(addr_tab + pos) = i * 0x1000;
-                pos++;
-            }
-        }
-        //check available sectors
-        if(pos != sectors) return NO_FILE_SECTOR_SPACE;
-
-        for(uint32_t i = 0; i < sectors; i++) {
-            mark_sector_inuse(*(addr_tab + i) / 0x1000);
-        }
-        */
+        Result res = append_file_impl(file, buffer, size, 1);
+        return res;
     }
 
-    return 100;
+    return UNKNOWN_WRITE_METHOD;
+}
+
+Result append_file(File *file, uint8_t *buffer, uint32_t size) {
+    Result res = append_file_impl(file, buffer, size, 0);
+    return res;
+}
+
+Result append_finish(File *file) {
+    update_fileblock_length(file, file->length);
+    return APPEND_FILE_FINISH;
 }
 
 void delete_file(File *file) {
@@ -258,19 +182,16 @@ void delete_file(File *file) {
 }
 
 FileList *list_file() {
-
     FileBlock *fb;
     FileList *index = NULL;
     uint32_t addr_start, addr_end;
-
     uint8_t *cache = (uint8_t *)malloc(sizeof(uint8_t) * 24);
 
     for(uint32_t i = 0; i < 4; i++) {
         addr_start = addr_tab[i];
-        addr_end = ((i + 1) * 0x1000) - addr_start;
+        addr_end = ((i + 1) * 0x1000) - addr_start - 24;
         for(; addr_start < addr_end; addr_start += 24) {
             w25q32_read(cache, 24, addr_start);
-            //unsafe: only for little endian platform
             fb = (FileBlock *)cache;
             if((fb->state != 0xFFFFFFFF) && (fb->length != 0xFFFFFFFF)) {
                 FileList *item = (FileList *)malloc(sizeof(FileList));
@@ -298,8 +219,166 @@ void recycle_filelist(FileList *list) {
     }
 }
 
-void system_gc() {
+Result append_file_impl(File *file, uint8_t *buffer, uint32_t size, uint8_t update) {
 
+    if(file->cluster == 0xFFFFFFFF) return FILE_CAN_NOT_APPEND;
+    uint32_t pos = 0, sectors, *sector_list;
+    //read old file
+    uint32_t next_addr = file->cluster, temp = 0x00;
+
+    //计算文件结束位置
+    pos = file->length % 4092;
+    pos = (pos == 0) ? 4092 : pos;
+    //文件长度超过一扇区，遍历找到最后一个扇区首地址
+    if(file->length > 4092) {
+        sectors = file->length / 4092;
+        for(uint32_t i = 0; i < sectors; i++) {
+            w25q32_read((uint8_t *)&temp, 4, (next_addr + 4092));
+            next_addr = temp;
+        }
+    }
+    //计算该扇区空余空间
+    uint32_t left_size = (next_addr + 4092) - (next_addr + pos);
+    //追加模式写新内容起始地址
+    uint32_t write_addr = next_addr + pos;
+    uint32_t write_size = 0x00, addr_pos = 0x00;
+
+    if(left_size >= size) {
+        //剩余空间足够写追加内容
+        temp = size;
+        pos = 0;
+        while(temp) {
+            write_size = (temp >= 256) ? 256 : (temp % 256);
+            w25q32_write_page((buffer + pos), write_size, (write_addr + addr_pos));
+            pos += write_size;
+            temp -= write_size;
+            addr_pos += write_size;
+        }
+
+        if(update) {
+            update_fileblock_length(file, (file->length + size));
+        }else {
+            file->length += size;
+        }
+        return APPEND_FILE_SUCCESS;
+
+    }else {
+        //剩余空间不够写追加内容
+        temp = size - left_size;
+        printf("%d,%d\n",temp,left_size);
+
+        uint8_t has_gc = 0;
+        sectors = temp / 4092;
+        if((temp % 4092) != 0) {
+            sectors += 1;
+        }
+
+        sectors = (left_size == 0) ? sectors : (sectors + 1);
+        sector_list = (uint32_t *)malloc(sizeof(uint32_t) * sectors);
+        *(sector_list + 0) = (left_size == 0) ? 0 : write_addr;
+
+        FIND_SECTOR_APPEND:
+        pos = (left_size == 0) ? 0 : 1;
+        for(uint32_t i = 4; i < 4096; i++) {
+            if(pos >= sectors) break;
+            if(sector_isempty(i)) {
+                *(sector_list + pos) = i * 0x1000;
+                pos++;
+            }
+        }
+
+        if(pos != sectors) {
+            if(has_gc == 0) {
+                system_gc();
+                has_gc = 1;
+                goto FIND_SECTOR_APPEND;
+            }
+            free(sector_list);
+            return NO_FILE_SECTOR_SPACE;
+        }
+
+        pos = (left_size == 0) ? 0 : 1;
+        for(uint32_t i = pos; i < sectors; i++) {
+            mark_sector_inuse(*(sector_list + i) / 0x1000);
+        }
+
+        if(left_size == 0) {
+            write_value(write_addr, *(sector_list + 0), 4);
+        }
+        //sector loop
+        pos = 0;
+        temp = size;
+        for(uint32_t i = 0; i < sectors; i++) {
+            write_addr = *(sector_list + i);
+            write_size = 0;
+            addr_pos = 0;
+            //page loop
+            while(temp) {
+                if(addr_pos >= 4092) {
+                    write_value((write_addr + addr_pos), *(sector_list + i + 1), 4);
+                    break;
+                }
+                write_size = (temp >= 256) ? 256 : (temp % 256);
+                if((addr_pos + write_size) > 4092) {
+                    write_size = 4092 - addr_pos;
+                }
+                w25q32_write_page((buffer + pos), write_size, (write_addr + addr_pos));
+                pos += write_size;
+                temp -= write_size;
+                addr_pos += write_size;
+            }
+        }
+        free(sector_list);
+
+        if(update) {
+            update_fileblock_length(file, (file->length + size));
+        }else {
+            file->length += size;
+        }
+
+        return APPEND_FILE_SUCCESS;
+    }
+}
+
+void mark_bit(uint8_t *buffer, uint32_t sec_id) {
+    uint32_t idx = (sec_id / 8) * 8, pos = sec_id % 8;
+    *(buffer + idx) |= (0x1 << pos);
+}
+
+uint8_t check_bit(uint8_t *buffer, uint32_t sec_id) {
+    uint32_t idx = (sec_id / 8) * 8, pos = sec_id % 8;
+    return ((*(buffer + idx) >> pos) & 0x1);
+}
+
+void clear_fileblock(uint8_t *buffer, uint32_t offset) {
+    for(uint32_t i = 0; i < 24; i++) {
+        *(buffer + offset + i) = 0xFF;
+    }
+}
+
+void update_fileblock_length(File *file, uint32_t new_size) {
+    uint32_t fb_pos = 0x00, write_addr;
+    fb_pos = file->block / 0x1000;
+    uint8_t *sector_buffer = (uint8_t *)malloc(sizeof(uint8_t) * 4096);
+    w25q32_read(sector_buffer, 4096, (fb_pos * 0x1000));
+    //计算新的文件大小
+    file->length = new_size;
+    write_addr = (fb_pos == 0) ? file->block : (file->block - addr_tab[fb_pos]);
+    //写新文件大小
+    for(uint32_t i = 0; i < 4; i++) {
+        *(sector_buffer + write_addr + 16 + i) = ((new_size >> (i * 8)) & 0xFF);
+    }
+    //擦除原扇区
+    write_addr = (fb_pos * 0x1000);
+    sector_erase(write_addr);
+    //回写数据
+    for(uint32_t i = 0; i < 16; i++) {
+        w25q32_write_page((sector_buffer + i * 256), 256, (write_addr + i * 256));
+    }
+    free(sector_buffer);
+}
+
+void system_gc() {
     FileBlock *fb = NULL;
     uint32_t addr_start, addr_end, temp = 0x00;
 
@@ -344,7 +423,7 @@ void system_gc() {
         //检查该扇区数据是否被更新
         if(check_bit(sector_flag, i) == 1) {
             //擦除该扇区，回写新数据
-            sector_erase(((i == 0) ? 0x00 : addr_tab[i]));
+            sector_erase(i * 0x1000);
             for(uint32_t j = 0 ; j < 16; j++) {
                 if(i == 0) {
                     //0扇区需要提前回写使用情况标记

@@ -31,20 +31,6 @@ void disp_filelist(FileList *list) {
     }
 }
 
-void make_fstate(FileState *fstate) {
-    fstate->day = 21;
-    fstate->month = 10;
-    fstate->year = 19;
-    fstate->state = 0xFF;
-}
-
-void make_file(File *file, char *filename, char *extname) {
-    file->block = 0x00;
-    file->cluster = 0xFFFFFFFF;
-    file->length = 0xFFFFFFFF;
-    strcopy(filename, file->filename, strsize((uint8_t *)filename));
-    strcopy(extname, file->extname, strsize((uint8_t *)extname));
-}
 
 int main(int argc, char *argv[]) {
     puts("w25q32 spi flash emulator");
@@ -59,31 +45,31 @@ int main(int argc, char *argv[]) {
     make_file(&file, "hello", "txt");
 
     FileState state;
-    make_fstate(&state);
+    make_fstate(&state, 19, 10, 24);
 
     Result result;
 
     result = create_file(&file, state);
     printf("result: %d, addr: 0x%x\n", result, file.block);
 
-    uint8_t *filebuffer = (uint8_t *)malloc(sizeof(uint8_t) * 352);
-    array_fill(filebuffer, 0xAA, 32);
+    uint8_t *filebuffer = (uint8_t *)malloc(sizeof(uint8_t) * 4092);
+    array_fill(filebuffer, 0xAA, 4092);
 
-    result = write_file(&file, filebuffer, 32, WRITE);
+    result = write_file(&file, filebuffer, 4092, WRITE);
     printf("write_file_result: %d\n", result);
     printf("file.cluster: 0x%x\n", file.cluster);
     printf("file.length: 0x%x\n", file.length);
 
-    array_fill(filebuffer, 0xBB, 317);
-    result = write_file(&file, filebuffer, 317, APPEND);
-    printf("write_file_result: %d\n", result);
-    printf("file.cluster: 0x%x\n", file.cluster);
-    printf("file.length: 0x%x\n", file.length);
-
-
-    array_fill(filebuffer, 0xCC, 12);
+    array_fill(filebuffer, 0xBB, 12);
     result = write_file(&file, filebuffer, 12, APPEND);
-    printf("write_file_result: %d\n", result);
+    printf("append_file_result: %d\n", result);
+    printf("file.cluster: 0x%x\n", file.cluster);
+    printf("file.length: 0x%x\n", file.length);
+
+
+    array_fill(filebuffer, 0xCC, 3);
+    result = write_file(&file, filebuffer, 3, APPEND);
+    printf("append_file_result: %d\n", result);
     printf("file.cluster: 0x%x\n", file.cluster);
     printf("file.length: 0x%x\n", file.length);
 

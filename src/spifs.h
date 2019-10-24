@@ -41,11 +41,12 @@ typedef enum {
     CREATE_FILE_BLOCK_SUCCESS = 0,
     WRITE_FILE_SUCCESS,
     APPEND_FILE_SUCCESS,
-
+    APPEND_FILE_FINISH,
     NO_FILE_BLOCK_SPACE,
     FILE_UNALLOCATED,
     NO_FILE_SECTOR_SPACE,
-    FILE_CAN_NOT_APPEND
+    FILE_CAN_NOT_APPEND,
+    UNKNOWN_WRITE_METHOD
 } Result;
 
 typedef enum {
@@ -57,15 +58,22 @@ typedef enum {
 #include "misc.h"
 #include "diskio.h"
 
+void mark_bit(uint8_t *buffer, uint32_t sec_id);
+uint8_t check_bit(uint8_t *buffer, uint32_t sec_id);
+void clear_fileblock(uint8_t *buffer, uint32_t offset);
+void update_fileblock_length(File *file, uint32_t new_size);
+Result append_file_impl(File *file, uint8_t *buffer, uint32_t size, uint8_t update);
+void system_gc();
+
+void make_fstate(FileState *fstate, uint8_t year, uint8_t month, uint8_t day);
+void make_file(File *file, char *filename, char *extname);
 Result create_file(File *file, FileState fstate);
-
 Result write_file(File *file, uint8_t *buffer, uint32_t size, WriteMethod method);
-
+Result append_file(File *file, uint8_t *buffer, uint32_t size);
+Result append_finish(File *file);
 void delete_file(File *file);
-
 FileList *list_file();
-
 void recycle_filelist(FileList *list);
 
-void system_gc();
+
 #endif
