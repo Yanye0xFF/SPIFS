@@ -39,7 +39,7 @@ uint8_t mark_sector_inuse(uint32_t sec_id) {
 /*
 写文件块记录
 addr为物理地址，应在：[扇区0 0x200 ~ 扇区3 0x3FFF]
-@param addr 写入的物理地址
+@param addr 物理地址
 @param *fb 文件结构块指针
 */
 void write_fileblock(uint32_t addr, FileBlock *fb) {
@@ -47,6 +47,13 @@ void write_fileblock(uint32_t addr, FileBlock *fb) {
     w25q32_write_page(slot_buffer, 24, addr);
 }
 
+/*
+在指定地址写值
+最大4字节,由bytes指定
+@param addr 物理地址
+@param value 写入数据
+@param bytes 字节数
+*/
 void write_value(uint32_t addr, uint32_t value, uint8_t bytes) {
     uint8_t buffer[bytes];
     for(uint8_t i = 0; i < bytes; i++) {

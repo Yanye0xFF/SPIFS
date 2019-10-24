@@ -16,9 +16,8 @@ uint8_t *w25q32_get_buffer() {
     return w25q32_buffer;
 }
 
-
 /**
- * 整个芯片擦除,擦除完成后为FF
+ * 整片擦除,擦除完成后为FF
  * W25Q16:25s
  * W25Q32:40s
  * W25Q64:40s
@@ -122,9 +121,20 @@ uint8_t w25q32_write_multipage(uint8_t *buffer, uint32_t size, uint32_t address)
 		return 0x00;
 	}
 
+    size = (size > 256) ? 256 : size;
+
 	if(size > 256) {
 		size = 256;
 	}
+
+    uint32_t offset = 0, write_size = 0,;
+
+    while(size) {
+        write_size = (size >= 256) ? 256 : size % 256;
+        w25q32_write_page((buffer + offset), write_size, (address + offset));
+        offset += write_size;
+        size -= write_size
+    }
 
 	return 0x2;
 }

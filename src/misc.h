@@ -8,4 +8,5 @@ void array_copy(uint8_t *from, uint8_t *to, uint32_t size);
 
 uint32_t strsize(uint8_t *str);
 void strcopy(char *from, uint8_t *to, uint32_t size);
+
 #endif // __MISC_H__

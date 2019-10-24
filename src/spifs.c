@@ -2,7 +2,7 @@
 
 /*
 簇大小 == 扇区大小 == 4KB
-sector0 ~ sector 3 扇区占用索引表,文件索引表
+sector 0 ~ sector 3 扇区占用索引表,文件索引表
 
 sector0: 0x000 ~ 0x1FF 扇区占用索引表,共512字节
 可表示4096个簇占用情况,即最大支持flash容量为16MB
@@ -10,16 +10,19 @@ sector0: 0x000 ~ 0x1FF 扇区占用索引表,共512字节
 sector0: 0x200 ~ sector3 : 0x3FFF 文件索引表
 每个文件索引占24字节,共可支持659个文件
 
-文件簇 = 4KB, 其中数据区4092字节,最后4字节为下一簇号指针,FFFFFFFF表示文件结束
-(文件簇末尾4字节还可使用物理地址,具体取决于实现)
+文件簇 = 4KB, 其中数据区4092字节,最后4字节为下一簇物理地址,FFFFFFFF表示文件结束
 */
 
-/*
-0扇区 偏移512字节
-*/
-
+//FB文件块位于0~3扇区首地址
 const uint32_t addr_tab[4] = {0x0200, 0x1000, 0x2000, 0x3000};
 
+/*
+创建文件状态字
+@param *fstate 状态字段指针
+@param year 文件创建年份 以2000年为起点，记录经过年数
+@param month 文件创建月份
+@param day 文件创建的day of month
+*/
 void make_fstate(FileState *fstate, uint8_t year, uint8_t month, uint8_t day) {
     fstate->day = day;
     fstate->month = month;
@@ -27,6 +30,12 @@ void make_fstate(FileState *fstate, uint8_t year, uint8_t month, uint8_t day) {
     fstate->state = 0xFF;
 }
 
+/*
+创建文件块
+@param *file 文件指针
+@param filename 文件名称 最大8字符
+@param extname 文件拓展名 最大4字符
+*/
 void make_file(File *file, char *filename, char *extname) {
     file->block = 0x00;
     file->cluster = 0xFFFFFFFF;
@@ -35,12 +44,18 @@ void make_file(File *file, char *filename, char *extname) {
     strcopy(extname, file->extname, strsize((uint8_t *)extname));
 }
 
+/*
+创建文件
+执行操作: 写文件块记录扇区，可能的full gc
+@param *file 文件指针
+@param fstate 文件状态字
+*/
 Result create_file(File *file, FileState fstate) {
 
     FileBlock *fb = NULL;
     uint8_t has_gc = 0;
-    uint32_t idx = 0, addr_start, addr_end, temp = 0x00, count = 0x00;
 
+    uint32_t idx = 0, addr_start, addr_end, temp = 0x00, count = 0x00;
     uint8_t *slot_buffer = (uint8_t *)malloc(sizeof(uint8_t) * 24);
 
     //check sector usage table
@@ -96,6 +111,22 @@ Result create_file(File *file, FileState fstate) {
     return CREATE_FILE_BLOCK_SUCCESS;
 }
 
+/*
+写文件
+覆盖写入模式(WRITE):查找空扇区写入数据,并将扇区链表首地址写入文件块记录
+追加写入模式(APPEND):当前文件最后扇区剩余空间足够写入数据:直接在文件尾部添加数据
+                     当前文件最后扇区不足以写入数据: 先在当前文件尾部写数据，
+                     余下部分查找空闲扇区写入，并更新文件扇区链表
+//TODO
+bug fix
+对已有数据的文件实行WRITE，会导致首扇区链表地址更新失败
+原数据扇区失去索引而不能被回收
+
+@param *file 文件指针
+@param *buffer 写入数据缓冲区
+@param size 写入字节数
+@param file method 写入方式(覆盖/追加)
+*/
 Result write_file(File *file, uint8_t *buffer, uint32_t size, WriteMethod method) {
 
     if(file->block == 0x00) return FILE_UNALLOCATED;
@@ -164,16 +195,35 @@ Result write_file(File *file, uint8_t *buffer, uint32_t size, WriteMethod method
     return UNKNOWN_WRITE_METHOD;
 }
 
+/*
+追加写文件
+此方法适用于频繁调用
+追加完毕需调用append_finish()更新文件块记录信息
+@param *file 文件指针
+@param *buffer 写入数据缓冲区
+@param size 写入字节数
+*/
 Result append_file(File *file, uint8_t *buffer, uint32_t size) {
     Result res = append_file_impl(file, buffer, size, 0);
     return res;
 }
 
+/*
+追加写完成
+更新文件块记录信息
+@param *file 文件指针
+*/
 Result append_finish(File *file) {
     update_fileblock_length(file, file->length);
     return APPEND_FILE_FINISH;
 }
 
+/*
+删除文件
+考虑到flash寿命,此操作不会立即擦除扇区
+而将文件状态字标注为被删除,仅在垃圾回收时才会擦除扇区数据
+@param *file 文件指针
+*/
 void delete_file(File *file) {
     uint8_t state = 0xFF;
     w25q32_read(&state, 1, (file->block + 23));
@@ -181,6 +231,11 @@ void delete_file(File *file) {
     write_fileblock_state(file->block, state);
 }
 
+/*
+返回文件列表
+以链表形式存储
+使用完毕务必调用recycle_filelist()释放文件
+*/
 FileList *list_file() {
     FileBlock *fb;
     FileList *index = NULL;
@@ -209,6 +264,10 @@ FileList *list_file() {
     return index;
 }
 
+/*
+释放文件列表内存
+@param *list 文件列表指针
+*/
 void recycle_filelist(FileList *list) {
     FileList *ptr = NULL;
     while(list) {

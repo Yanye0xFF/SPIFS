@@ -26,11 +26,9 @@ void disp_filelist(FileList *list) {
         printf("block:0x%x\n", list->File.block);
         printf("cluster:0x%x\n", list->File.cluster);
         printf("length:0x%x\n", list->File.length);
-
         list = ptr;
     }
 }
-
 
 int main(int argc, char *argv[]) {
     puts("w25q32 spi flash emulator");

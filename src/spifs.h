@@ -75,5 +75,4 @@ void delete_file(File *file);
 FileList *list_file();
 void recycle_filelist(FileList *list);
 
-
 #endif
