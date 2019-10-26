@@ -117,6 +117,7 @@ Result create_file(File *file, FileState fstate) {
 追加写入模式(APPEND):当前文件最后扇区剩余空间足够写入数据:直接在文件尾部添加数据
                      当前文件最后扇区不足以写入数据: 先在当前文件尾部写数据，
                      余下部分查找空闲扇区写入，并更新文件扇区链表
+对于追加写入模式(APPEND)额外提供append_file()方法,优化对flash擦写次数
 //TODO
 bug fix
 对已有数据的文件实行WRITE，会导致首扇区链表地址更新失败
@@ -324,7 +325,6 @@ Result append_file_impl(File *file, uint8_t *buffer, uint32_t size, uint8_t upda
     }else {
         //剩余空间不够写追加内容
         temp = size - left_size;
-        printf("%d,%d\n",temp,left_size);
 
         uint8_t has_gc = 0;
         sectors = temp / 4092;

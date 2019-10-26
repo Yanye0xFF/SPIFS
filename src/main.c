@@ -23,9 +23,8 @@ void disp_filelist(FileList *list) {
         printf(",extname:");
         paint_name(list->File.extname, sizeof(list->File.extname));
         putchar('\n');
-        printf("block:0x%x\n", list->File.block);
-        printf("cluster:0x%x\n", list->File.cluster);
-        printf("length:0x%x\n", list->File.length);
+        printf("block addr:0x%x,cluster_addr:0x%x,length:0x%x\n",
+               list->File.block, list->File.cluster, list->File.length);
         list = ptr;
     }
 }
@@ -40,46 +39,52 @@ int main(int argc, char *argv[]) {
     puts("chip_erase");
 
     File file;
-    make_file(&file, "hello", "txt");
-
+    Result result;
     FileState state;
+
+    make_file(&file, "hello", "txt");
     make_fstate(&state, 19, 10, 24);
 
-    Result result;
-
     result = create_file(&file, state);
-    printf("result: %d, addr: 0x%x\n", result, file.block);
+    printf("create_file:result: %d, addr: 0x%x\n", result, file.block);
 
-    uint8_t *filebuffer = (uint8_t *)malloc(sizeof(uint8_t) * 4092);
-    array_fill(filebuffer, 0xAA, 4092);
+    uint8_t *filebuffer = (uint8_t *)malloc(sizeof(uint8_t) * 5120);
+    array_fill(filebuffer, 0xAA, 5120);
 
-    result = write_file(&file, filebuffer, 4092, WRITE);
+    result = write_file(&file, filebuffer, 5120, WRITE);
     printf("write_file_result: %d\n", result);
-    printf("file.cluster: 0x%x\n", file.cluster);
-    printf("file.length: 0x%x\n", file.length);
+    printf("file.cluster: 0x%x,file.length: 0x%x\n", file.cluster, file.length);
 
-    array_fill(filebuffer, 0xBB, 12);
-    result = write_file(&file, filebuffer, 12, APPEND);
+
+    array_fill(filebuffer, 0xBB, 388);
+    result = append_file(&file, filebuffer, 388);
     printf("append_file_result: %d\n", result);
-    printf("file.cluster: 0x%x\n", file.cluster);
     printf("file.length: 0x%x\n", file.length);
 
-
-    array_fill(filebuffer, 0xCC, 3);
-    result = write_file(&file, filebuffer, 3, APPEND);
+    array_fill(filebuffer, 0xEE, 165);
+    result = append_file(&file, filebuffer, 165);
     printf("append_file_result: %d\n", result);
-    printf("file.cluster: 0x%x\n", file.cluster);
     printf("file.length: 0x%x\n", file.length);
+
+    result = append_finish(&file);
+
+    printf("append_finish: %d\n", result);
+
 
     free(filebuffer);
 
-    /*
+
     printf("list of file:\n");
     FileList *list = list_file();
     disp_filelist(list);
-    delete_file(&(list->File));
+    //delete_file(&(list->File));
+
     recycle_filelist(list);
-    */
+
+    //system_gc();
+
+    //printf("system_gc\n");
+
     if(1) {
         FILE *out = fopen("ramdisk", "wb" );
         uint8_t *buff = w25q32_get_buffer();

@@ -127,13 +127,13 @@ uint8_t w25q32_write_multipage(uint8_t *buffer, uint32_t size, uint32_t address)
 		size = 256;
 	}
 
-    uint32_t offset = 0, write_size = 0,;
+    uint32_t offset = 0, write_size = 0;
 
     while(size) {
         write_size = (size >= 256) ? 256 : size % 256;
         w25q32_write_page((buffer + offset), write_size, (address + offset));
         offset += write_size;
-        size -= write_size
+        size -= write_size;
     }
 
 	return 0x2;

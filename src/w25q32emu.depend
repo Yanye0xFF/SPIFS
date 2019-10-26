@@ -1,0 +1,39 @@
+# depslib dependency file v1.0
+1571575997 source:e:\cppprojects\w25q32emu\diskio.c
+	"diskio.h"
+
+1571576165 source:e:\cppprojects\w25q32emu\main.c
+	<stdio.h>
+	"spifs.h"
+	"w25q32.h"
+	"misc.h"
+
+1571572269 e:\cppprojects\w25q32emu\spifs.h
+	<stdint.h>
+	<stdlib.h>
+	<stdio.h>
+	"w25q32.h"
+	"misc.h"
+	"diskio.h"
+
+1571126496 e:\cppprojects\w25q32emu\w25q32.h
+	<stdint.h>
+	<stdlib.h>
+	<string.h>
+
+1571575607 source:e:\cppprojects\w25q32emu\spifs.c
+	"spifs.h"
+
+1571216784 source:e:\cppprojects\w25q32emu\w25q32.c
+	"w25q32.h"
+
+1571574294 e:\cppprojects\w25q32emu\diskio.h
+	"stdint.h"
+	"spifs.h"
+
+1571145078 e:\cppprojects\w25q32emu\misc.h
+	"stdint.h"
+
+1571145015 source:e:\cppprojects\w25q32emu\misc.c
+	"misc.h"
+

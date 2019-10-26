@@ -6,6 +6,8 @@
  spifs为文件系统实现  
  w25q32模拟了一个flash存储器  
  main主要为测试  
+ update:20191026  
+ 上传CodeBlocks项目，可直接导入codeblocks IDE进行开发  
  文档说明：  
  http://116.62.109.24/?post=27  
  文档稍后补全
