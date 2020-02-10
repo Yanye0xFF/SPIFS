@@ -4,7 +4,7 @@
 本文件系统采用单一文件的布局，并不支持文件夹；使用8+4文件名(类似于FAT的短文件名只是后缀由3字节变为4字节)，文件名8字节与后缀名4字节可连在一起使用。
 
 ## api说明
-使用文件名(filename)，和(extname)拓展名创建文件，此时文件并未写入，  
+使用文件名(filename)，和(extname)拓展名创建文件，此时存储器并未并未写入任何内容，  
 只是将filename和extname复制进file。
 ```c
 void make_file(File *file, char *filename, char *extname)
@@ -20,18 +20,19 @@ void make_fstate(FileState *fstate, uint32_t year, uint8_t month, uint8_t day)
 Result create_file(File *file, FileState fstate)
 ```
 
-写文件，完成后更新文件块的大小和首簇地址
+写文件，查找空扇区填充数据，完成后更新文件块的大小和首簇地址
 ```c
 Result write_file(File *file, uint8_t *buffer, uint32_t size)
 ```
 
-追加写文件，完成后需要调用append_finish更新文件块的大小信息
+追加写文件，查找空扇区填充数据，可多次调用，  
+在最后一次调用完成后需要使用append_finish更新文件块的大小信息
 ```c
 Result append_file(File *file, uint8_t *buffer, uint32_t size)
 Result append_finish(File *file);
 ```
 
-使用文件名+拓展名查找打开/打开文件
+使用文件名+拓展名查找/打开文件
 ```c
 uint8_t open_file(File *file, char *filename, char *extname)
 ```
