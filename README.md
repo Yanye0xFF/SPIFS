@@ -66,3 +66,23 @@ void spifs_gc();
 FileList *list_file()
 void recycle_filelist(FileList *list)
 ```
+
+## 文件系统结构图示
+
+扇区大小与文件簇大小相同  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/sector_size.png)  
+
+存储器数据布局，文件索引块占用0~3扇区  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/total_view.png)  
+
+文件索引块结构  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/index_struct.png)  
+
+文件索引块->状态字结构  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/state_struct.png)  
+
+文件索引块->状态字->标记位  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/flag_struct.png)  
+
+数据域结构  
+![image](https://raw.githubusercontent.com/Yanye0xFF/PictureBed/master/images/hp39explorer/data_area.png)  
